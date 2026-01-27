@@ -15,15 +15,15 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
 
-            - name: Generate CalVer version
-              id: calver
-              shell: bash
-              run: |
-                  # Generate CalVer version: YYYY.MM.DD.RUN_NUMBER
-                  VERSION=$(date +'%Y.%m.%d').${{ github.run_number }}
-                  echo "version=$VERSION" >> $GITHUB_OUTPUT
-                  echo "Generated version: $VERSION"
+            - name: Get next version
+              uses: reecetech/version-increment@2024.10.1
+              id: version
+              with:
+                  scheme: calver
+                  increment: patch
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
@@ -40,7 +40,7 @@ jobs:
             - name: Update version in tauri.conf.json
               shell: bash
               run: |
-                  VERSION="${{ steps.calver.outputs.version }}"
+                  VERSION="${{ steps.version.outputs.version }}"
                   # Update version in tauri.conf.json
                   sed -i "s/\"version\": \"[^\"]*\"/\"version\": \"$VERSION\"/" src-tauri/tauri.conf.json
                   cat src-tauri/tauri.conf.json
@@ -48,7 +48,7 @@ jobs:
             - name: Update version in Cargo.toml
               shell: bash
               run: |
-                  VERSION="${{ steps.calver.outputs.version }}"
+                  VERSION="${{ steps.version.outputs.version }}"
                   # Update version in Cargo.toml
                   sed -i "s/^version = \"[^\"]*\"/version = \"$VERSION\"/" src-tauri/Cargo.toml
                   cat src-tauri/Cargo.toml
@@ -59,7 +59,7 @@ jobs:
             - name: Rename MSI with version
               shell: bash
               run: |
-                  VERSION="${{ steps.calver.outputs.version }}"
+                  VERSION="${{ steps.version.outputs.version }}"
                   # Find and rename the MSI file
                   MSI_FILE=$(find src-tauri/target/release/bundle/msi -name "*.msi" | head -1)
                   if [ -n "$MSI_FILE" ]; then
@@ -75,10 +75,10 @@ jobs:
             - name: Create GitHub Release
               uses: softprops/action-gh-release@v2
               with:
-                  tag_name: v${{ steps.calver.outputs.version }}
-                  name: Release ${{ steps.calver.outputs.version }}
+                  tag_name: ${{ steps.version.outputs.version }}
+                  name: Release ${{ steps.version.outputs.version }}
                   body: |
-                      ## DR Icon Changer v${{ steps.calver.outputs.version }}
+                      ## DR Icon Changer v${{ steps.version.outputs.version }}
 
                       ### Download
                       Download the MSI installer below and run it to install DR Icon Changer.
