@@ -102,30 +102,36 @@ jobs:
                   MSI_NAME="DR-Icon-Changer-${VERSION}.msi"
                   SIG_FILE="src-tauri/target/release/bundle/msi/${MSI_NAME}.sig"
                   DOWNLOAD_URL="https://github.com/sammers21/dr-icon-changer/releases/download/${VERSION}/${MSI_NAME}"
+                  OUTPUT_FILE="src-tauri/target/release/bundle/msi/latest.json"
 
-                  # Read the signature
+                  # Read the signature (preserve exact content)
                   SIGNATURE=""
                   if [ -f "$SIG_FILE" ]; then
                     SIGNATURE=$(cat "$SIG_FILE")
                   fi
 
-                  # Create latest.json
-                  cat > src-tauri/target/release/bundle/msi/latest.json << EOF
-                  {
-                    "version": "${VERSION}",
-                    "notes": "Release ${VERSION}",
-                    "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-                    "platforms": {
-                      "windows-x86_64": {
-                        "signature": "${SIGNATURE}",
-                        "url": "${DOWNLOAD_URL}"
+                  # Create latest.json using jq for proper JSON encoding
+                  jq -n \
+                    --arg version "$VERSION" \
+                    --arg notes "Release $VERSION" \
+                    --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                    --arg signature "$SIGNATURE" \
+                    --arg url "$DOWNLOAD_URL" \
+                    '{
+                      version: $version,
+                      notes: $notes,
+                      pub_date: $pub_date,
+                      platforms: {
+                        "windows-x86_64": {
+                          signature: $signature,
+                          url: $url
+                        }
                       }
-                    }
-                  }
-                  EOF
-                  echo "LATEST_JSON_PATH=src-tauri/target/release/bundle/msi/latest.json" >> $GITHUB_ENV
+                    }' > "$OUTPUT_FILE"
+
+                  echo "LATEST_JSON_PATH=$OUTPUT_FILE" >> $GITHUB_ENV
                   echo "Generated latest.json"
-                  cat src-tauri/target/release/bundle/msi/latest.json
+                  cat "$OUTPUT_FILE"
 
             - name: Create GitHub Release
               if: contains(github.event.head_commit.message, 'release')
