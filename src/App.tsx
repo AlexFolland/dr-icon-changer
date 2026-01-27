@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Store } from "@tauri-apps/plugin-store";
 import { check } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { info, error as logError } from "@tauri-apps/plugin-log";
 import "./App.css";
 import { TgaImage, tgaToBase64 } from "./TgaImage";
 
@@ -169,12 +170,17 @@ function App() {
   useEffect(() => {
     async function checkForUpdates() {
       try {
+        await info("Checking for updates...");
         const update = await check();
         if (update) {
+          await info(`Update available: ${update.version}`);
           console.log(`Update available: ${update.version}`);
           setUpdateAvailable(update.version);
+        } else {
+          await info("No updates available");
         }
       } catch (e) {
+        await logError(`Failed to check for updates: ${e}`);
         console.error("Failed to check for updates:", e);
       }
     }
@@ -185,20 +191,29 @@ function App() {
   async function installUpdate() {
     setIsUpdating(true);
     try {
+      await info("Starting update installation...");
       const update = await check();
       if (update) {
+        await info(`Downloading and installing update ${update.version}...`);
         await update.downloadAndInstall();
+        await info("Update downloaded and installed successfully");
         // Clear the update banner since download is complete
         setUpdateAvailable(null);
         // Try to relaunch - if this fails, user can manually restart
         try {
+          await info("Attempting to relaunch application...");
           await relaunch();
         } catch (relaunchError) {
-          console.error("Relaunch failed, please restart manually:", relaunchError);
+          await logError(`Relaunch failed: ${relaunchError}`);
+          console.error(
+            "Relaunch failed, please restart manually:",
+            relaunchError,
+          );
           // Update is installed, it will apply on next restart
         }
       }
     } catch (e) {
+      await logError(`Failed to install update: ${e}`);
       console.error("Failed to install update:", e);
       setIsUpdating(false);
     }

@@ -5,6 +5,9 @@
   "identifier": "io.github.sammers21.dr-icon-changer",
   "plugins": {
     "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
       "endpoints": [
         "https://github.com/sammers21/dr-icon-changer/releases/latest/download/latest.json"
       ],

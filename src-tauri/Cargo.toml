@@ -27,4 +27,6 @@ base64 = "0.22.1"
 tauri-plugin-store = "2.4.2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
+tauri-plugin-log = "2"
+log = "0.4"
 
