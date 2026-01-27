@@ -14,13 +14,16 @@ import rootDefault from "./assets/default-drs/spell_nature_stranglevines.tga";
 // Import alternative icons - Stun
 import stunAlt1 from "./assets/alternative-stun/ability_rogue_kidneyshot.tga";
 import stunAlt2 from "./assets/alternative-stun/ability_CheapShot.tga";
+import stunAlt3 from "./assets/alternative-stun/spell_holy_sealofmight.tga";
 
 // Import alternative icons - Incap (sheep)
 import incapAlt1 from "./assets/alternaitve-incap/spell_nature_polymorph.tga";
 import incapAlt2 from "./assets/alternaitve-incap/spell_frost_chainsofice.tga";
+import incapAlt3 from "./assets/alternaitve-incap/ability_monk_paralysis.tga";
 
 // Import alternative icons - Fear
 import fearAlt1 from "./assets/alternative-fear/spell_shadow_possession.tga";
+import fearAlt2 from "./assets/alternative-fear/spell_shadow_psychicscream.tga";
 
 // Import alternative icons - Root
 import rootAlt1 from "./assets/alternative-root/spell_frost_frostnova.tga";
@@ -51,6 +54,7 @@ const initialDRCategories: DRCategory[] = [
     alternatives: [
       { src: stunAlt1, name: "Kidney Shot" },
       { src: stunAlt2, name: "Cheap Shot" },
+      { src: stunAlt3, name: "Hammer of Justice" },
     ],
     selectedIcon: stunDefault,
     affectedAbilities: [
@@ -69,6 +73,7 @@ const initialDRCategories: DRCategory[] = [
     alternatives: [
       { src: incapAlt1, name: "Polymorph" },
       { src: incapAlt2, name: "Chains of Ice" },
+      { src: incapAlt3, name: "Paralysis" },
     ],
     selectedIcon: incapDefault,
     affectedAbilities: [
@@ -84,7 +89,10 @@ const initialDRCategories: DRCategory[] = [
     description: "Fear effects (Psychic Scream, Howl of Terror, etc.)",
     defaultIcon: fearDefault,
     defaultIconName: "Spell_Nature_AstralRecalGroup.tga",
-    alternatives: [{ src: fearAlt1, name: "Possession" }],
+    alternatives: [
+      { src: fearAlt1, name: "Possession" },
+      { src: fearAlt2, name: "Psychic Scream" },
+    ],
     selectedIcon: fearDefault,
     affectedAbilities: [
       "Intimidating Shout",
