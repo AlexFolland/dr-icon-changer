@@ -378,10 +378,11 @@ function App() {
           <p className="description">
             Choose which version of WoW you want to work with:
           </p>
-          <p className="selected-path">
+          <div className="selected-path valid">
             <span className="path-icon">📂</span>
-            {wowFolder}
-          </p>
+            <span className="path-text">{wowFolder}</span>
+            <span className="valid-checkmark">✓</span>
+          </div>
           <div className="version-grid">
             {versions.map((version) => (
               <button
