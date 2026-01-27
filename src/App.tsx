@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Store } from "@tauri-apps/plugin-store";
+import { check } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import "./App.css";
 import { TgaImage, tgaToBase64 } from "./TgaImage";
 
@@ -131,6 +133,8 @@ function App() {
   const [applyingIcon, setApplyingIcon] = useState<string | null>(null);
   const [resettingAll, setResettingAll] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState<boolean>(false);
 
   // Load saved WoW folder on app start
   useEffect(() => {
@@ -160,6 +164,37 @@ function App() {
 
     loadSavedFolder();
   }, []);
+
+  // Check for updates on app start
+  useEffect(() => {
+    async function checkForUpdates() {
+      try {
+        const update = await check();
+        if (update) {
+          console.log(`Update available: ${update.version}`);
+          setUpdateAvailable(update.version);
+        }
+      } catch (e) {
+        console.error("Failed to check for updates:", e);
+      }
+    }
+
+    checkForUpdates();
+  }, []);
+
+  async function installUpdate() {
+    setIsUpdating(true);
+    try {
+      const update = await check();
+      if (update) {
+        await update.downloadAndInstall();
+        await relaunch();
+      }
+    } catch (e) {
+      console.error("Failed to install update:", e);
+      setIsUpdating(false);
+    }
+  }
 
   // Save WoW folder when it changes
   async function saveWowFolder(folder: string) {
@@ -347,6 +382,18 @@ function App() {
   return (
     <main className="container">
       <div className="background-glow"></div>
+      {updateAvailable && (
+        <div className="update-banner">
+          <span>Update v{updateAvailable} available!</span>
+          <button
+            className="update-btn"
+            onClick={installUpdate}
+            disabled={isUpdating}
+          >
+            {isUpdating ? "Updating..." : "Update Now"}
+          </button>
+        </div>
+      )}
       {isLoading && (
         <div className="loading-screen">
           <div className="logo-container">
