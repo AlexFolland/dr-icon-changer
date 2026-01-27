@@ -188,7 +188,15 @@ function App() {
       const update = await check();
       if (update) {
         await update.downloadAndInstall();
-        await relaunch();
+        // Clear the update banner since download is complete
+        setUpdateAvailable(null);
+        // Try to relaunch - if this fails, user can manually restart
+        try {
+          await relaunch();
+        } catch (relaunchError) {
+          console.error("Relaunch failed, please restart manually:", relaunchError);
+          // Update is installed, it will apply on next restart
+        }
       }
     } catch (e) {
       console.error("Failed to install update:", e);
