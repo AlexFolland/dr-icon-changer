@@ -35,8 +35,13 @@ jobs:
               run: npm ci
 
             - name: Build Tauri app
+              shell: bash
               run: |
-                  echo "Signing key configured: $([[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]] && echo 'YES' || echo 'NO')"
+                  if [ -n "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+                    echo "Signing key configured: YES"
+                  else
+                    echo "Signing key configured: NO"
+                  fi
                   npm run tauri build
               env:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
