@@ -1,13 +1,95 @@
 use log::info;
+use serde::Serialize;
+use std::collections::HashSet;
+use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+#[derive(Serialize)]
+struct DetectedWowFolder {
+    folder: String,
+    versions: Vec<String>,
+}
 
 /// Get WoW version directories from a given WoW folder path.
 /// Returns directories that match the pattern _*_ (like _retail_, _beta_, etc.)
 #[tauri::command]
 fn get_wow_versions(wow_folder: &str) -> Result<Vec<String>, String> {
-    let path = Path::new(wow_folder);
+    list_wow_versions(Path::new(wow_folder))
+}
 
+#[tauri::command]
+fn auto_detect_wow_folder() -> Result<Option<DetectedWowFolder>, String> {
+    for candidate in wow_candidate_paths() {
+        if let Some((folder, versions)) = resolve_wow_folder(&candidate) {
+            return Ok(Some(DetectedWowFolder {
+                folder: folder.to_string_lossy().to_string(),
+                versions,
+            }));
+        }
+    }
+    Ok(None)
+}
+
+fn resolve_wow_folder(start: &Path) -> Option<(PathBuf, Vec<String>)> {
+    let mut current = Some(start);
+    while let Some(path) = current {
+        if let Ok(versions) = list_wow_versions(path) {
+            if !versions.is_empty() {
+                return Some((path.to_path_buf(), versions));
+            }
+        }
+        current = path.parent();
+    }
+    None
+}
+
+fn wow_candidate_paths() -> Vec<PathBuf> {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(program_files_x86) = env::var("PROGRAMFILES(X86)") {
+            candidates.push(PathBuf::from(program_files_x86).join("World of Warcraft"));
+        }
+        if let Ok(program_files) = env::var("PROGRAMFILES") {
+            candidates.push(PathBuf::from(program_files).join("World of Warcraft"));
+        }
+        candidates.push(PathBuf::from("C:\\World of Warcraft"));
+        candidates.push(PathBuf::from("C:\\Games\\World of Warcraft"));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        candidates.push(PathBuf::from("/Applications/World of Warcraft"));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(home) = env::var("HOME") {
+            candidates.push(
+                PathBuf::from(&home)
+                    .join(".wine")
+                    .join("drive_c")
+                    .join("Program Files (x86)")
+                    .join("World of Warcraft"),
+            );
+            candidates.push(PathBuf::from(home).join("Games").join("World of Warcraft"));
+        }
+    }
+
+    let mut seen = HashSet::new();
+    let mut unique = Vec::new();
+    for candidate in candidates {
+        let key = candidate.to_string_lossy().to_lowercase();
+        if seen.insert(key) {
+            unique.push(candidate);
+        }
+    }
+    unique
+}
+
+fn list_wow_versions(path: &Path) -> Result<Vec<String>, String> {
     if !path.exists() {
         return Err("Folder does not exist".to_string());
     }
@@ -164,6 +246,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_wow_versions,
+            auto_detect_wow_folder,
             apply_dr_icon,
             reset_dr_icon,
             reset_all_icons

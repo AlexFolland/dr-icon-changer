@@ -34,7 +34,12 @@ import rootAlt1 from "./assets/alternative-root/spell_frost_frostnova.tga";
 // Import app logo
 import appLogo from "./assets/app-logo.png";
 
-type Screen = "folder-select" | "version-select" | "dr-customize";
+type Screen = "auto-detect" | "folder-select" | "version-select" | "dr-customize";
+
+interface DetectedWowFolder {
+  folder: string;
+  versions: string[];
+}
 
 interface DRCategory {
   id: string;
@@ -79,12 +84,7 @@ const initialDRCategories: DRCategory[] = [
       { src: incapAlt3, name: "Paralysis" },
     ],
     selectedIcon: incapDefault,
-    affectedAbilities: [
-      "Repentance",
-      "Gouge",
-      "Sap",
-      "and other incapacitate abilities",
-    ],
+    affectedAbilities: [    ],
   },
   {
     id: "fear",
@@ -97,12 +97,7 @@ const initialDRCategories: DRCategory[] = [
       { src: fearAlt2, name: "Psychic Scream" },
     ],
     selectedIcon: fearDefault,
-    affectedAbilities: [
-      "Intimidating Shout",
-      "Psychic Scream",
-      "Howl of Terror",
-      "and other fear abilities",
-    ],
+    affectedAbilities: [],
   },
   {
     id: "root",
@@ -128,6 +123,9 @@ function App() {
   const [selectedVersion, setSelectedVersion] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [isHovering, setIsHovering] = useState<boolean>(false);
+  const [autoDetected, setAutoDetected] = useState<DetectedWowFolder | null>(
+    null,
+  );
   const [drCategories, setDRCategories] =
     useState<DRCategory[]>(initialDRCategories);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -136,6 +134,10 @@ function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState<boolean>(false);
+  const [settingsLoaded, setSettingsLoaded] = useState<boolean>(false);
+  const [selectedIconsByVersion, setSelectedIconsByVersion] = useState<
+    Record<string, Record<string, string>>
+  >({});
 
   // Load saved WoW folder on app start
   useEffect(() => {
@@ -143,28 +145,61 @@ function App() {
       try {
         const store = await Store.load("settings.json");
         const savedFolder = await store.get<string>("wowFolder");
+        const savedIconsByVersion = await store.get<
+          Record<string, Record<string, string>>
+        >("selectedIconsByVersion");
+        const legacySavedIcons =
+          await store.get<Record<string, string>>("selectedIcons");
+
+        if (savedIconsByVersion && Object.keys(savedIconsByVersion).length > 0) {
+          setSelectedIconsByVersion(savedIconsByVersion);
+        } else if (legacySavedIcons) {
+          setSelectedIconsByVersion({ __legacy__: legacySavedIcons });
+        }
+
+        let resolvedSaved = false;
 
         if (savedFolder) {
-          setWowFolder(savedFolder);
-          // Try to get versions for the saved folder
-          const detectedVersions = await invoke<string[]>("get_wow_versions", {
-            wowFolder: savedFolder,
-          });
-
-          if (detectedVersions.length > 0) {
-            setVersions(detectedVersions);
+          const resolved = await resolveWowFolder(savedFolder);
+          if (resolved) {
+            resolvedSaved = true;
+            setWowFolder(resolved.folder);
+            setVersions(resolved.versions);
             setScreen("version-select");
+            if (resolved.folder !== savedFolder) {
+              await saveWowFolder(resolved.folder);
+            }
+          } else {
+            setWowFolder(savedFolder);
+          }
+        }
+
+        if (!resolvedSaved) {
+          const detected =
+            await invoke<DetectedWowFolder | null>("auto_detect_wow_folder");
+          if (detected) {
+            setAutoDetected(detected);
+            setScreen("auto-detect");
+          } else {
+            setScreen("folder-select");
           }
         }
       } catch (e) {
         console.error("Failed to load saved folder:", e);
       } finally {
         setIsLoading(false);
+        setSettingsLoaded(true);
       }
     }
 
     loadSavedFolder();
   }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    if (!selectedVersion) return;
+    saveSelectedIcons(selectedVersion, drCategories);
+  }, [drCategories, settingsLoaded, selectedVersion]);
 
   // Check for updates on app start
   useEffect(() => {
@@ -230,6 +265,77 @@ function App() {
     }
   }
 
+  async function saveSelectedIcons(
+    version: string,
+    categories: DRCategory[],
+  ) {
+    try {
+      const store = await Store.load("settings.json");
+      const selections: Record<string, string> = {};
+      categories.forEach((category) => {
+        selections[category.id] = category.selectedIcon;
+      });
+      const existing =
+        (await store.get<Record<string, Record<string, string>>>(
+          "selectedIconsByVersion",
+        )) ?? {};
+      const updated = { ...existing, [version]: selections };
+      await store.set("selectedIconsByVersion", updated);
+      await store.save();
+      setSelectedIconsByVersion(updated);
+    } catch (e) {
+      console.error("Failed to save selected icons:", e);
+    }
+  }
+
+  function buildCategoriesForVersion(
+    selections?: Record<string, string>,
+  ): DRCategory[] {
+    return initialDRCategories.map((category) => {
+      const storedIcon = selections ? selections[category.id] : undefined;
+      if (!storedIcon) {
+        return { ...category, selectedIcon: category.defaultIcon };
+      }
+      const isDefault = storedIcon === category.defaultIcon;
+      const isAlternative = category.alternatives.some(
+        (alt) => alt.src === storedIcon,
+      );
+      return {
+        ...category,
+        selectedIcon: isDefault || isAlternative ? storedIcon : category.defaultIcon,
+      };
+    });
+  }
+
+  function getParentFolder(folderPath: string): string | null {
+    const trimmed = folderPath.replace(/[\\/]+$/, "");
+    const match = trimmed.match(/^(.*)[\\/][^\\/]+$/);
+    if (!match) return null;
+    return match[1] || null;
+  }
+
+  async function getWowVersions(folderPath: string): Promise<string[]> {
+    return invoke<string[]>("get_wow_versions", { wowFolder: folderPath });
+  }
+
+  async function resolveWowFolder(
+    folderPath: string,
+  ): Promise<{ folder: string; versions: string[] } | null> {
+    let current: string | null = folderPath;
+    while (current) {
+      const versions = await getWowVersions(current).catch(() => []);
+      if (versions.length > 0) {
+        return { folder: current, versions };
+      }
+      const next = getParentFolder(current);
+      if (!next || next === current) {
+        break;
+      }
+      current = next;
+    }
+    return null;
+  }
+
   // Helper function to fetch image as base64 (handles TGA files)
   async function fetchImageAsBase64(imageSrc: string): Promise<string> {
     // Use tgaToBase64 for TGA files
@@ -258,24 +364,23 @@ function App() {
 
       if (selected) {
         const folderPath = selected as string;
+        setAutoDetected(null);
         setWowFolder(folderPath);
         setError("");
 
-        // Get WoW versions from the selected folder
-        const detectedVersions = await invoke<string[]>("get_wow_versions", {
-          wowFolder: folderPath,
-        });
-
-        if (detectedVersions.length === 0) {
+        // Get WoW versions from the selected folder or its parent
+        const resolved = await resolveWowFolder(folderPath);
+        if (!resolved) {
           setError(
             "No WoW version directories found. Please select a valid WoW folder (should contain directories like _retail_, _beta_, etc.)",
           );
           setVersions([]);
         } else {
-          setVersions(detectedVersions);
+          setWowFolder(resolved.folder);
+          setVersions(resolved.versions);
           setScreen("version-select");
           // Save the folder for next time
-          await saveWowFolder(folderPath);
+          await saveWowFolder(resolved.folder);
         }
       }
     } catch (e) {
@@ -283,8 +388,29 @@ function App() {
     }
   }
 
+  async function acceptAutoDetected() {
+    if (!autoDetected) return;
+    setWowFolder(autoDetected.folder);
+    setVersions(autoDetected.versions);
+    setScreen("version-select");
+    setAutoDetected(null);
+    await saveWowFolder(autoDetected.folder);
+  }
+
+  function rejectAutoDetected() {
+    setAutoDetected(null);
+    setWowFolder("");
+    setVersions([]);
+    setSelectedVersion("");
+    setError("");
+    setScreen("folder-select");
+  }
+
   function selectVersion(version: string) {
     setSelectedVersion(version);
+    const selections =
+      selectedIconsByVersion[version] ?? selectedIconsByVersion.__legacy__;
+    setDRCategories(buildCategoriesForVersion(selections));
     setScreen("dr-customize");
   }
 
@@ -425,6 +551,33 @@ function App() {
           <p className="description">Loading...</p>
         </div>
       )}
+      {!isLoading && screen === "auto-detect" && autoDetected && (
+        <div className="auto-detect-screen">
+          <div className="logo-container small">
+            <img src={appLogo} alt="DR Logo" className="logo" />
+          </div>
+          <h1>We found a World of Warcraft folder</h1>
+          <p className="description">
+            We scanned common install locations. If this looks right, click Use
+            this folder. Otherwise choose a different location.
+          </p>
+          <div className="selected-path">
+            <span className="path-icon">📁</span>
+            <span className="path-text">{autoDetected.folder}</span>
+          </div>
+          <div className="detected-versions">
+            Found versions: {autoDetected.versions.join(", ")}
+          </div>
+          <div className="detect-actions">
+            <button className="select-folder-btn" onClick={acceptAutoDetected}>
+              Use this folder
+            </button>
+            <button className="back-btn" onClick={rejectAutoDetected}>
+              Choose different
+            </button>
+          </div>
+        </div>
+      )}
       {!isLoading && screen === "folder-select" && (
         <div className="folder-select-screen">
           <div
@@ -557,12 +710,14 @@ function App() {
                         </div>
                       ))}
                     </div>
-                    <div className="disclaimer-warning">
-                      <strong>⚠️ Warning:</strong>
-                      Changing this icon will also affect the appearance of:{" "}
-                      {category.affectedAbilities.join(", ")}. This is because
-                      they share the same base icon texture.
-                    </div>
+                    {category.affectedAbilities.length > 0 && (
+                      <div className="disclaimer-warning">
+                        <strong>⚠️ Warning:</strong>
+                        Changing this icon will also affect the appearance of:{" "}
+                        {category.affectedAbilities.join(", ")}. This is because
+                        they share the same base icon texture.
+                      </div>
+                    )}
                     {category.selectedIcon !== category.defaultIcon && (
                       <button
                         className="reset-btn"

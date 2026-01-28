@@ -371,6 +371,7 @@ button:active {
 }
 
 /* Screen Layouts */
+.auto-detect-screen,
 .folder-select-screen,
 .version-select-screen,
 .dr-customize-screen {
@@ -380,6 +381,25 @@ button:active {
   width: 100%;
   max-width: 700px;
   animation: fadeIn 0.4s ease-out;
+}
+
+.detect-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.detect-actions .back-btn {
+  margin-top: 0;
+}
+
+.detected-versions {
+  margin-top: 0.75rem;
+  font-size: 0.85em;
+  color: var(--text-muted);
 }
 
 .dr-customize-screen {
@@ -772,6 +792,7 @@ button:active {
   font-family: "Consolas", "Monaco", monospace;
   font-size: 0.9em;
 }
+
 
 /* Reset All Button */
 .reset-all-btn {
